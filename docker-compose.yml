@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  mattermost:
+    image: ${MATTERMOST_IMAGE:-ghcr.io/korjavin/mattermost-vendor:latest}
+    container_name: ${MATTERMOST_CONTAINER_NAME:-mattermost}
+    restart: unless-stopped
+    depends_on:
+      - mattermost-db
+    networks:
+      - internal
+      - traefik_network
+    volumes:
+      - ${MATTERMOST_CONFIG_PATH:-./volumes/mattermost/config}:/mattermost/config:rw
+      - ${MATTERMOST_DATA_PATH:-./volumes/mattermost/data}:/mattermost/data:rw
+      - ${MATTERMOST_LOGS_PATH:-./volumes/mattermost/logs}:/mattermost/logs:rw
+      - ${MATTERMOST_PLUGINS_PATH:-./volumes/mattermost/plugins}:/mattermost/plugins:rw
+      - ${MATTERMOST_CLIENT_PLUGINS_PATH:-./volumes/mattermost/client/plugins}:/mattermost/client/plugins:rw
+      - ${MATTERMOST_BLEVE_INDEXES_PATH:-./volumes/mattermost/bleve-indexes}:/mattermost/bleve-indexes:rw
+    environment:
+      TZ: ${TIMEZONE:-UTC}
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://${POSTGRES_USER:-mattermost}:${POSTGRES_PASSWORD}@mattermost-db:5432/${POSTGRES_DB:-mattermost}?sslmode=disable&connect_timeout=10
+      MM_BLEVESETTINGS_INDEXDIR: /mattermost/bleve-indexes
+      MM_SERVICESETTINGS_SITEURL: https://${MATTERMOST_HOST}
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${TRAEFIK_NETWORK_NAME:-traefik_default}"
+      - "traefik.http.routers.mattermost.rule=Host(`${MATTERMOST_HOST}`)"
+      - "traefik.http.routers.mattermost.entrypoints=websecure"
+      - "traefik.http.routers.mattermost.tls.certresolver=${TRAEFIK_CERTRESOLVER:-myresolver}"
+      - "traefik.http.services.mattermost.loadbalancer.server.port=8065"
+
+  mattermost-db:
+    image: ${POSTGRES_IMAGE:-ghcr.io/korjavin/mattermost-postgres-vendor:latest}
+    container_name: ${DB_CONTAINER_NAME:-mattermost-db}
+    restart: unless-stopped
+    networks:
+      - internal
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      TZ: ${TIMEZONE:-UTC}
+      POSTGRES_DB: ${POSTGRES_DB:-mattermost}
+      POSTGRES_USER: ${POSTGRES_USER:-mattermost}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  internal:
+    name: ${INTERNAL_NETWORK_NAME:-mattermost_internal}
+  traefik_network:
+    external: true
+    name: ${TRAEFIK_NETWORK_NAME:-traefik_default}
+
+volumes:
+  db-data:
+    name: ${DB_VOLUME_NAME:-mattermost_db-data}

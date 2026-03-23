@@ -1,0 +1,59 @@
+name: Vendor Images to GHCR
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'   # Weekly on Monday at 04:00 UTC
+  workflow_dispatch:
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and re-push mattermost image
+        env:
+          UPSTREAM_IMAGE: mattermost/mattermost-enterprise-edition:release-10.5
+          GHCR_IMAGE: ghcr.io/korjavin/mattermost-vendor
+        run: |
+          docker pull "${UPSTREAM_IMAGE}"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${UPSTREAM_IMAGE}" | cut -d@ -f2)
+          docker tag "${UPSTREAM_IMAGE}" "${GHCR_IMAGE}:latest"
+          docker push "${GHCR_IMAGE}:latest"
+          echo "Vendored ${UPSTREAM_IMAGE} → ${GHCR_IMAGE}:latest (digest: ${DIGEST})"
+
+      - name: Pull and re-push postgres image
+        env:
+          UPSTREAM_IMAGE: postgres:16-alpine
+          GHCR_IMAGE: ghcr.io/korjavin/mattermost-postgres-vendor
+        run: |
+          docker pull "${UPSTREAM_IMAGE}"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${UPSTREAM_IMAGE}" | cut -d@ -f2)
+          docker tag "${UPSTREAM_IMAGE}" "${GHCR_IMAGE}:latest"
+          docker push "${GHCR_IMAGE}:latest"
+          echo "Vendored ${UPSTREAM_IMAGE} → ${GHCR_IMAGE}:latest (digest: ${DIGEST})"
+
+      - name: Update deploy branch
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git checkout -B deploy
+          git push origin deploy --force
+
+      - name: Trigger Portainer Redeploy Webhook
+        uses: distributhor/workflow-webhook@2381f0e9c7b6bf061fb1405bd0804b8706116369 # v3.0.8
+        with:
+          webhook_url: ${{ secrets.PORTAINER_REDEPLOY_HOOK }}
+          webhook_secret: "trigger"
