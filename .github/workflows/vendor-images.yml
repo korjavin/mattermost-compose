@@ -25,7 +25,7 @@ jobs:
 
       - name: Pull and re-push mattermost image
         env:
-          UPSTREAM_IMAGE: mattermost/mattermost-enterprise-edition:release-10.5
+          UPSTREAM_IMAGE: mattermost/mattermost-team-edition:release-10.5
           GHCR_IMAGE: ghcr.io/korjavin/mattermost-vendor
         run: |
           docker pull "${UPSTREAM_IMAGE}"
