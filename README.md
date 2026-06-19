@@ -13,7 +13,7 @@ Self-hosted [Mattermost](https://mattermost.com/) team messaging platform deploy
 
 | Service | Image | Purpose |
 |---------|-------|---------|
-| `mattermost` | `mattermost-enterprise-edition` (vendored) | Main application |
+| `mattermost` | `mattermost-team-edition` (vendored) | Main application |
 | `mattermost-db` | `postgres:16-alpine` (vendored) | Database |
 
 ## Environment Variables
