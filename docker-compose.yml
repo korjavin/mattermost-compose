@@ -49,6 +49,41 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Optional restic backup sidecar. Disabled by default — enable by adding
+  # 'backup' to COMPOSE_PROFILES in your stack env (e.g. COMPOSE_PROFILES=backup).
+  mattermost-backup:
+    profiles: ["backup"]
+    image: ${BACKUP_IMAGE:-ghcr.io/korjavin/mattermost-backup:latest}
+    container_name: ${BACKUP_CONTAINER_NAME:-mattermost-backup}
+    restart: unless-stopped
+    depends_on:
+      - mattermost-db
+    networks:
+      - internal
+    volumes:
+      - ${MATTERMOST_DATA_PATH:-./volumes/mattermost/data}:/data:ro
+      - backup-cache:/cache
+    environment:
+      TZ: ${TIMEZONE:-UTC}
+      PGHOST: mattermost-db
+      POSTGRES_DB: ${POSTGRES_DB:-mattermost}
+      POSTGRES_USER: ${POSTGRES_USER:-mattermost}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD}
+      RESTIC_CACHE_DIR: /cache
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      RESTIC_KEEP_DAILY: ${RESTIC_KEEP_DAILY:-7}
+      RESTIC_KEEP_WEEKLY: ${RESTIC_KEEP_WEEKLY:-4}
+      RESTIC_KEEP_MONTHLY: ${RESTIC_KEEP_MONTHLY:-6}
+      # Set the credential pair matching your RESTIC_REPOSITORY backend:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      B2_ACCOUNT_ID: ${B2_ACCOUNT_ID:-}
+      B2_ACCOUNT_KEY: ${B2_ACCOUNT_KEY:-}
+    security_opt:
+      - no-new-privileges:true
+
 networks:
   internal:
     name: ${INTERNAL_NETWORK_NAME:-mattermost_internal}
@@ -59,3 +94,5 @@ networks:
 volumes:
   db-data:
     name: ${DB_VOLUME_NAME:-mattermost_db-data}
+  backup-cache:
+    name: ${BACKUP_CACHE_VOLUME_NAME:-mattermost_backup-cache}

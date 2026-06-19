@@ -15,6 +15,7 @@ Self-hosted [Mattermost](https://mattermost.com/) team messaging platform deploy
 |---------|-------|---------|
 | `mattermost` | `mattermost-team-edition` (vendored) | Main application |
 | `mattermost-db` | `postgres:16-alpine` (vendored) | Database |
+| `mattermost-backup` | `mattermost-backup` (built) | Optional restic backups — enabled via the `backup` compose profile |
 
 ## Environment Variables
 
@@ -84,6 +85,47 @@ Self-hosted [Mattermost](https://mattermost.com/) team messaging platform deploy
 After the first vendor workflow run, set package visibility:
 - `github.com/korjavin` → Packages → `mattermost-vendor` → Settings → visibility
 - `github.com/korjavin` → Packages → `mattermost-postgres-vendor` → Settings → visibility
+
+## Backups (optional)
+
+An optional `mattermost-backup` sidecar runs [restic](https://restic.net/) on a
+schedule, backing up the Postgres database (via `pg_dump`) and the file store to
+any restic-supported backend (Backblaze B2, S3-compatible, SFTP). Backups are
+encrypted and deduplicated.
+
+**It is disabled by default.** To enable it:
+
+1. Build the image once — push to `master` (the `Build Backup Image` workflow
+   builds `ghcr.io/korjavin/mattermost-backup:latest`), or run that workflow
+   manually.
+2. In Portainer stack env vars, set:
+   - `COMPOSE_PROFILES=backup`
+   - `RESTIC_REPOSITORY` (e.g. `b2:my-bucket:mattermost`)
+   - `RESTIC_PASSWORD` (generate with `openssl rand -hex 32` — **store it off-server**)
+   - the credential pair for your backend (`B2_ACCOUNT_ID`/`B2_ACCOUNT_KEY` or `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`)
+   - optionally tune `BACKUP_INTERVAL_SECONDS` (default 86400 = daily) and
+     `RESTIC_KEEP_DAILY`/`WEEKLY`/`MONTHLY`
+3. Redeploy the stack. The sidecar initializes the repo on first run, then backs
+   up on the configured interval.
+
+### Restore
+
+Run commands against the running sidecar on the host:
+
+```bash
+# List snapshots / verify repo
+docker exec mattermost-backup backup.sh snapshots
+docker exec mattermost-backup backup.sh check
+
+# Restore the database into the running DB container
+docker exec mattermost-backup backup.sh restore-db \
+  | docker exec -i mattermost-db psql -U mattermost mattermost
+
+# Restore the file store into a directory, then copy it back into place
+docker exec mattermost-backup backup.sh restore-files /tmp/restore
+```
+
+> Test a restore periodically — an untested backup is only a hope.
 
 ## Links
 
